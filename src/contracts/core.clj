@@ -2,40 +2,48 @@
   (:use [clojure.string :only [] :as string]
         [clojure.core.match :only [match]]))
 
-(defn either [f val & vals]
-  (some (partial f val) vals))
+(defn either
+  ([val preds] ((apply some-fn preds) val))
+  ([f val vals] (some (partial f val) vals)))
 
 
-(defn report [value {:keys [type var checker]}]
-  {:pre [(either = type :pre :post)]}
+(defn report [value {:keys [type var pred]}]
+  {:pre [(either = type [:pre :post])]}
   (let [type (case type
                :pre "Precondition"
                :post "Postcondition")]
     (format "%s failed for var %s %n Expecting: %s %n Given: %s"
-            type var (pr-str checker) (pr-str value))))
+            type var (pr-str pred) (pr-str value))))
 
-(defn check [pred info]
-  #(if (pred %)
-     %
-     (throw (AssertionError. (report % info)))))
-
-(defn combinator-expr? [expr] 
+(defn combinator-expr? [expr]
   (and (seq? expr)
        (= (resolve (first expr)) #'=>)))
 
 (defn gen-check [type expr]
   (if (combinator-expr? expr)
     expr
-    `(check ~expr {:type ~type, :checker '~expr})
-    
-    ))
+    (cons `or
+          (for [[val pred] expr]
+            `(when-not (~pred ~val)
+               (report ~val {:type ~type :pred '~pred}))))))
 
 (defmacro =>
-  [pre post]
-  `(fn [f#]
-     (comp ~(gen-check :post post)
-           f#
-           ~(gen-check :pre pre))))
+  ([pre post]
+     (let [pre (if-not (vector? pre) [pre] pre)
+           args (map #(symbol (str "arg-" (inc %)))
+                     (range (count pre)))
+           pre (zipmap args pre)]
+       `(=> [~@args] ~pre ~post)))
+  ([args pre post]
+     (let [result (gensym "result")]
+       `(fn [f#]
+          (fn [~@args]
+            (if-let [pre-error# ~(gen-check :pre pre)]
+              (throw (AssertionError. pre-error#))
+              (let [~result (f# ~@args)]
+                (if-let [post-error# ~(gen-check :post {result post})]
+                  (throw (AssertionError. post-error#))
+                  ~result))))))))
 
 (defmacro provide-contract [sym contract]
   (letfn [(normalize [expr]

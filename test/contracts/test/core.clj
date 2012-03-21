@@ -2,25 +2,24 @@
   (:use [contracts.core :as c :exclude [=>]] :reload)
   (:use [midje.sweet]))
 
-(future-fact "Simple contracts with explicit arguments"
-             (let [inc' ((c/=> [x]   {x number?}       pos?) inc)
-                   *'   ((c/=> [x y] {x even?, y odd?} pos?) *)]
-               (inc' 1) => 2
-               (inc' "1") => (throws AssertionError #"Pre")
-               (inc' -1) => (throws AssertionError #"Post")
-               (*' 2 3) => 6
-               (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
-               (*' 3 3) => (throws AssertionError #"Pre" #"even?")
-               (*' 3 2) => (throws AssertionError #"Pre" #"even?" #"odd?")
-               (*' 2 -3) => (throws AssertionError #"Post")))
+(fact "Simple contracts with explicit arguments"
+  (let [inc' ((c/=> [x]   {x number?}       pos?) inc)
+        *'   ((c/=> [x y] {x even?, y odd?} pos?) *)]
+    (inc' 1) => 2
+    (inc' "1") => (throws AssertionError #"Pre")
+    (inc' -1) => (throws AssertionError #"Post")
+    (*' 2 3) => 6
+    (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
+    (*' 3 3) => (throws AssertionError #"Pre" #"even?")
+    (*' 2 -3) => (throws AssertionError #"Post")))
 
-(future-fact "Checking arbitrary expressions"
+(fact "Checking arbitrary expressions"
   (let [f (fn [x y] (- (+ x y)))
-        f' (c/=> [x y] {x number?, y number?, (+ x y) pos?} odd?)]
+        f' ((c/=> [x y] {x number?, y number?, (+ x y) pos?} odd?) f)]
     (f' 1 2) => -3
     (f' -1 -2) => (throws AssertionError #"Pre" #"pos?")
     (f' "foo" 2) => (throws AssertionError #"Pre" #"number?")
-    (f' -1 -1) => (throws AssertionError #"Post" "odd?")))
+    (f' 1 1) => (throws AssertionError #"Post" #"odd?")))
 
 (fact "Simple constrainst on a single-argument function without args declaration"
   (let [inc' ((c/=> number? pos?) inc)]
@@ -28,22 +27,21 @@
     (inc' "1") => (throws AssertionError #"Pre")
     (inc' -1) => (throws AssertionError #"Post")))
 
-(future-fact "Contracts for functions with several args"
-             (let [*' ((c/=> [even? odd?] pos?) *)]
-               (*' 2 3) => 6
-               (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
-               (*' 3 3) => (throws AssertionError #"Pre" #"even?")
-               (*' 3 2) => (throws AssertionError #"Pre" #"even?" #"odd?")
-               (*' 2 -3) => (throws AssertionError #"Post")))
+(fact "Contracts for functions with several args"
+  (let [*' ((c/=> [even? odd?] pos?) *)]
+    (*' 2 3) => 6
+    (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
+    (*' 3 3) => (throws AssertionError #"Pre" #"even?")
+    (*' 2 -3) => (throws AssertionError #"Post")))
 
-(facts "Contracts for higher-order functions"
+(future-facts "Contracts for higher-order functions"
 
   (fact "Function returning function"
     (let [f (fn [x] (fn [y] (+ x y)))
           f' ((c/=> number? (c/=> even? pos?)) f)]
       ((f' 1) 2) => 3
-      ((f' "1") 2) => (throws AssertionError #"Pre")
-      ((f' 1) 3) => (throws AssertionError #"Pre")
+      ((f' "1") 2) => (throws AssertionError #"Pre" #"number?")
+      ((f' 1) 3) => (throws AssertionError #"Pre" #"even?")
       ((f' 1) -10) => (throws AssertionError #"Post")))
 
   (fact "Function accepting function as an argument"
@@ -89,8 +87,8 @@
 
 
 
-(defn h [x y] (* x y))
-(def h' ((c/=> [number? number?] pos?) h))
+;; (defn h [x y] (* x y))
+;; (def h' ((c/=> [number? number?] pos?) h))
 
 
 #_(provide-contract g [x]
