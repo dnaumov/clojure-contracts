@@ -2,7 +2,6 @@
   (:use [contracts.core :as c :exclude [=>]] :reload)
   (:use [midje.sweet]))
 
-
 (fact "Simple contracts with explicit arguments"
   (let [inc' ((c/=> [x]   {x number?}       pos?) inc)
         *'   ((c/=> [x y] {x even?, y odd?} pos?) *)]
@@ -13,7 +12,6 @@
     (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
     (*' 3 3) => (throws AssertionError #"Pre" #"even?")
     (*' 2 -3) => (throws AssertionError #"Post")))
-
 
 (fact "Checking arbitrary expressions"
   (let [f (fn [x y] (- (+ x y)))
@@ -62,8 +60,6 @@
       (g inc) => (throws AssertionError #"Pre" #"number?")
       (h inc) => (throws AssertionError #"Post" #"string?"))))
 
-
-
 (future-fact "Different contracts for different arities"
              (let [f (fn
                        ([x] (dec x))
@@ -82,3 +78,15 @@
                (f' 2 -3) => (throws AssertionError #"Post")
                ;; </copypasted>
                ))
+
+
+(defn constrained-inc [x] (inc x))
+(defn constrained-dec [x] (dec x))
+
+(provide-contracts
+ (constrained-inc (c/=> number? number?))
+ (constrained-dec [number? => number?]))
+
+(fact "provide-contracts and error messages"
+  (constrained-inc "foo") => (throws AssertionError #"#'contracts.test.core/constrained-inc")
+  (constrained-dec "bar") => (throws AssertionError #"Pre" #"number?"))

@@ -19,6 +19,8 @@
   (and (seq? expr)
        (= (resolve (first expr)) #'=>)))
 
+(def current-var (atom nil))
+
 (defn gen-check [type exprs+preds]
   (into {}
         (for [[expr pred] exprs+preds]
@@ -26,7 +28,9 @@
             `['~expr (~pred ~expr)]
             `['~expr (if (~pred ~expr)
                        ~expr
-                       (throw (AssertionError. (report ~expr {:type ~type :pred '~pred}))))]))))
+                       (throw (AssertionError. (report ~expr {:type ~type
+                                                              :pred '~pred
+                                                              :var ~(deref current-var)}))))]))))
 
 (defmacro =>
   ([pre post]
@@ -52,6 +56,7 @@
             (match expr
               [pre '=> post] (list* `=> (map normalize [pre post]))
               :else expr))]
+    (reset! current-var (resolve sym))
     `(alter-var-root (var ~sym) ~(normalize contract))))
 
 (defmacro provide-contracts [& clauses]
