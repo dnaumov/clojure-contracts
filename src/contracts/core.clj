@@ -1,6 +1,5 @@
 (ns contracts.core
-  (:use [clojure.string :only [] :as string]
-        [clojure.core.match :only [match]]))
+  (:use [clojure.core.match :only [match]]))
 
 (defn either
   ([val preds] ((apply some-fn preds) val))
@@ -15,35 +14,38 @@
     (format "%s failed for var %s %n Expecting: %s %n Given: %s"
             type var (pr-str pred) (pr-str value))))
 
+(declare =>)
 (defn combinator-expr? [expr]
   (and (seq? expr)
        (= (resolve (first expr)) #'=>)))
 
-(defn gen-check [type expr]
-  (if (combinator-expr? expr)
-    expr
-    (cons `or
-          (for [[val pred] expr]
-            `(when-not (~pred ~val)
-               (report ~val {:type ~type :pred '~pred}))))))
+(defn gen-check [type exprs+preds]
+  (into {}
+        (for [[expr pred] exprs+preds]
+          (if (combinator-expr? pred)
+            `['~expr (~pred ~expr)]
+            `['~expr (if (~pred ~expr)
+                       ~expr
+                       (throw (AssertionError. (report ~expr {:type ~type :pred '~pred}))))]))))
 
 (defmacro =>
   ([pre post]
      (let [pre (if-not (vector? pre) [pre] pre)
-           args (map #(symbol (str "arg-" (inc %)))
+           args (map #(gensym (str "arg-" (inc %) "__"))
                      (range (count pre)))
            pre (zipmap args pre)]
        `(=> [~@args] ~pre ~post)))
   ([args pre post]
-     (let [result (gensym "result")]
+     (let [pre-check-results (gensym "pre-check-results")
+           result (gensym "result")]
        `(fn [f#]
           (fn [~@args]
-            (if-let [pre-error# ~(gen-check :pre pre)]
-              (throw (AssertionError. pre-error#))
-              (let [~result (f# ~@args)]
-                (if-let [post-error# ~(gen-check :post {result post})]
-                  (throw (AssertionError. post-error#))
-                  ~result))))))))
+            (let [~pre-check-results ~(gen-check :pre pre)
+                  ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)]) ; contracts can alter the value of args, so we rebind them
+                            args)]
+              (let [~result (f# ~@args)
+                    ~result (-> ~(gen-check :post {result post}) first val)]
+                ~result)))))))
 
 (defmacro provide-contract [sym contract]
   (letfn [(normalize [expr]
