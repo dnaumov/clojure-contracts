@@ -60,24 +60,32 @@
       (g inc) => (throws AssertionError #"Pre" #"number?")
       (h inc) => (throws AssertionError #"Post" #"string?"))))
 
-(future-fact "Different contracts for different arities"
-             (let [f (fn
-                       ([x] (dec x))
-                       ([x y] (* x y)))
-                   f' ((c/=> number? neg?
-                             [even? odd?] pos?)
-                       f)]
-               (f' 0) => -1
-               (f' "foo") => (throws AssertionError #"Pre" #"number?")
-               (f' 1) => (throws AssertionError #"Post" #"neg?")
-               ;; XXX: <copypasted>
-               (f' 2 3) => 6
-               (f' 2 2) => (throws AssertionError #"Pre" #"odd?")
-               (f' 3 3) => (throws AssertionError #"Pre" #"even?")
-               (f' 3 2) => (throws AssertionError #"Pre" #"even?" #"odd?")
-               (f' 2 -3) => (throws AssertionError #"Post")
-               ;; </copypasted>
-               ))
+(fact "Contracts for multi-arity functions"
+  (let [f (fn
+            ([x] (dec x))
+            ([x y] (* x y)))
+        f' ((c/=> ([x] [x y])
+                  ({x number?} {x even?, y odd?})
+                  pos?)
+            f)]
+    (f' 10) => 9
+    (f' "foo") => (throws AssertionError #"Pre" #"number?")
+    (f' 0) => (throws AssertionError #"Post" #"pos?")
+    (f' 2 3) => 6
+    (f' 2 2) => (throws AssertionError #"Pre" #"odd?")
+    (f' 3 3) => (throws AssertionError #"Pre" #"even?")
+    (f' 2 -3) => (throws AssertionError #"Post")))
+
+(fact "Multi-arity contracts without explicit args declaration"
+  (let [f (fn ([x] (dec x)) ([x y] (* x y)))
+        f' ((c/=> ([number?] [even? odd?]) pos?) f)]
+    (f' 10) => 9
+    (f' "foo") => (throws AssertionError #"Pre" #"number?")
+    (f' 0) => (throws AssertionError #"Post" #"pos?")
+    (f' 2 3) => 6
+    (f' 2 2) => (throws AssertionError #"Pre" #"odd?")
+    (f' 3 3) => (throws AssertionError #"Pre" #"even?")
+    (f' 2 -3) => (throws AssertionError #"Post")))
 
 
 (defn constrained-inc [x] (inc x))

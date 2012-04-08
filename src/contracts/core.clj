@@ -17,6 +17,7 @@
 (declare =>)
 (defn combinator-expr? [expr]
   (and (seq? expr)
+       (symbol? (first expr))
        (= (resolve (first expr)) #'=>)))
 
 (def current-var (atom nil))
@@ -34,22 +35,35 @@
 
 (defmacro =>
   ([pre post]
-     (let [pre (if-not (vector? pre) [pre] pre)
-           args (map #(gensym (str "arg-" (inc %) "__"))
-                     (range (count pre)))
-           pre (zipmap args pre)]
-       `(=> [~@args] ~pre ~post)))
-  ([args pre post]
-     (let [pre-check-results (gensym "pre-check-results")
+     (let [pre (cond
+                (combinator-expr? pre) (list [pre])
+                (symbol? pre) (list [pre])
+                (vector? pre) (list pre)
+                (list? pre) pre)
+           args (map #(vec (repeatedly (count %) (partial gensym "arg__")))
+                     pre)
+           pre (map zipmap args pre)]
+       `(=> ~args ~pre ~post)))
+  ([arglist pre post]
+     (let [arglist (if (vector? arglist)
+                     (list arglist)
+                     arglist)
+           pre (if (map? pre)
+                 (list pre)
+                 pre)
+           f (gensym "f")
+           pre-check-results (gensym "pre-check-results")
            result (gensym "result")]
-       `(fn [f#]
-          (fn [~@args]
-            (let [~pre-check-results ~(gen-check :pre pre)
-                  ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)]) ; contracts can alter the value of args, so we rebind them
-                            args)]
-              (let [~result (f# ~@args)
-                    ~result (-> ~(gen-check :post {result post}) first val)]
-                ~result)))))))
+       `(fn [~f]
+          (fn ~@(-> (fn [args pre]
+                      `([~@args]
+                          (let [~pre-check-results ~(gen-check :pre pre)
+                                ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)]) ; contracts can alter the value of args, so we rebind them
+                                          args)]
+                            (let [~result (~f ~@args)
+                                  ~result (-> ~(gen-check :post {result post}) first val)]
+                              ~result))))
+                    (map arglist pre)))))))
 
 (defmacro provide-contract [sym contract]
   (letfn [(normalize [expr]
@@ -63,3 +77,5 @@
   (cons `do
         (for [clause clauses]
           `(provide-contract ~@clause))))
+
+;; (=> number? pos?)
