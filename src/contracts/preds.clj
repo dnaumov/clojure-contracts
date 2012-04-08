@@ -2,12 +2,18 @@
   (:refer-clojure :exclude [= == not= < > <= >=
                             identical? instance? extends? satisfies? isa?
                             contains? every? not-every? some not-any?
-                            and or not])
-  (:require [clojure.core :as c]))
+                            and or not vector-of])
+  (:require [clojure.core :as c])
+  (:use [clojure.core.match :only [match]]))
 
 ;; TODO: tests!
 
 (defn boolean? [x] (c/instance? Boolean x))
+(defn either [f vals] #(c/some (partial f %) vals))
+(def anything (constantly true))
+
+(defmacro match? [pattern]
+  `(fn [x#] (match x# ~pattern true)))
 
 (def and c/every-pred)
 (def or c/some-fn)
