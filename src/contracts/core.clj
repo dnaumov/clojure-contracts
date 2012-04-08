@@ -1,37 +1,47 @@
 (ns contracts.core
   (:use [clojure.core.match :only [match]]))
 
-(defn either
-  ([val preds] ((apply some-fn preds) val))
-  ([f val vals] (some (partial f val) vals)))
-
+(declare =>)
+(def current-var (atom nil))
 
 (defn report [value {:keys [type var pred]}]
-  {:pre [(either = type [:pre :post])]}
   (let [type (case type
                :pre "Precondition"
                :post "Postcondition")]
     (format "%s failed for var %s %n Expecting: %s %n Given: %s"
             type var (pr-str pred) (pr-str value))))
 
-(declare =>)
 (defn combinator-expr? [expr]
   (and (seq? expr)
        (symbol? (first expr))
        (= (resolve (first expr)) #'=>)))
 
-(def current-var (atom nil))
-
 (defn gen-check [type exprs+preds]
-  (into {}
-        (for [[expr pred] exprs+preds]
-          (if (combinator-expr? pred)
-            `['~expr (~pred ~expr)]
-            `['~expr (if (~pred ~expr)
-                       ~expr
-                       (throw (AssertionError. (report ~expr {:type ~type
-                                                              :pred '~pred
-                                                              :var ~(deref current-var)}))))]))))
+  (->> (for [[expr pred] exprs+preds]
+         (if (combinator-expr? pred)
+           `['~expr (~pred ~expr)]
+           `['~expr (if (~pred ~expr)
+                      ~expr
+                      (throw (AssertionError.
+                              (report ~expr {:type ~type
+                                             :pred '~pred
+                                             :var ~(deref current-var)}))))]))
+       (into {})))
+
+(defn wrap-in-list-if [pred x]
+  (if (pred x)
+    (list x)
+    x))
+
+(defn gen-constrained-body [f post pre args]
+  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])]
+    `([~@args]
+        (let [~pre-check-results ~(gen-check :pre pre)
+              ;; contract can alter the values of args, so we rebind them
+              ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)])
+                        args)
+              ~result (~f ~@args)]
+          (-> ~(gen-check :post {result post}) first val)))))
 
 (defmacro =>
   ([pre post]
@@ -44,26 +54,12 @@
                      pre)
            pre (map zipmap args pre)]
        `(=> ~args ~pre ~post)))
-  ([arglist pre post]
-     (let [arglist (if (vector? arglist)
-                     (list arglist)
-                     arglist)
-           pre (if (map? pre)
-                 (list pre)
-                 pre)
-           f (gensym "f")
-           pre-check-results (gensym "pre-check-results")
-           result (gensym "result")]
+  ([args pre post]
+     (let [arglist (wrap-in-list-if vector? args)
+           pre (wrap-in-list-if map? pre)
+           f (gensym "f")]
        `(fn [~f]
-          (fn ~@(-> (fn [args pre]
-                      `([~@args]
-                          (let [~pre-check-results ~(gen-check :pre pre)
-                                ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)]) ; contracts can alter the value of args, so we rebind them
-                                          args)]
-                            (let [~result (~f ~@args)
-                                  ~result (-> ~(gen-check :post {result post}) first val)]
-                              ~result))))
-                    (map arglist pre)))))))
+          (fn ~@(map (partial gen-constrained-body f post) pre arglist))))))
 
 (defmacro provide-contract [sym contract]
   (letfn [(normalize [expr]
@@ -77,5 +73,3 @@
   (cons `do
         (for [clause clauses]
           `(provide-contract ~@clause))))
-
-;; (=> number? pos?)

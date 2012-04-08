@@ -60,32 +60,30 @@
       (g inc) => (throws AssertionError #"Pre" #"number?")
       (h inc) => (throws AssertionError #"Post" #"string?"))))
 
-(fact "Contracts for multi-arity functions"
-  (let [f (fn
-            ([x] (dec x))
-            ([x y] (* x y)))
-        f' ((c/=> ([x] [x y])
-                  ({x number?} {x even?, y odd?})
-                  pos?)
-            f)]
-    (f' 10) => 9
-    (f' "foo") => (throws AssertionError #"Pre" #"number?")
-    (f' 0) => (throws AssertionError #"Post" #"pos?")
-    (f' 2 3) => 6
-    (f' 2 2) => (throws AssertionError #"Pre" #"odd?")
-    (f' 3 3) => (throws AssertionError #"Pre" #"even?")
-    (f' 2 -3) => (throws AssertionError #"Post")))
+(letfn [(do-checks [f]
+          (facts
+            (f 10) => 9
+            (f "foo") => (throws AssertionError #"Pre" #"number?")
+            (f 0) => (throws AssertionError #"Post" #"pos?")
+            (f 2 3) => 6
+            (f 2 2) => (throws AssertionError #"Pre" #"odd?")
+            (f 3 3) => (throws AssertionError #"Pre" #"even?")
+            (f 2 -3) => (throws AssertionError #"Post")))]
 
-(fact "Multi-arity contracts without explicit args declaration"
-  (let [f (fn ([x] (dec x)) ([x y] (* x y)))
-        f' ((c/=> ([number?] [even? odd?]) pos?) f)]
-    (f' 10) => 9
-    (f' "foo") => (throws AssertionError #"Pre" #"number?")
-    (f' 0) => (throws AssertionError #"Post" #"pos?")
-    (f' 2 3) => 6
-    (f' 2 2) => (throws AssertionError #"Pre" #"odd?")
-    (f' 3 3) => (throws AssertionError #"Pre" #"even?")
-    (f' 2 -3) => (throws AssertionError #"Post")))
+  (fact "Contracts for multi-arity functions"
+    (let [f (fn
+              ([x] (dec x))
+              ([x y] (* x y)))
+          f' ((c/=> ([x] [x y])
+                    ({x number?} {x even?, y odd?})
+                    pos?)
+              f)]
+      (do-checks f')))
+
+  (fact "Multi-arity contracts without explicit args declaration"
+    (let [f (fn ([x] (dec x)) ([x y] (* x y)))
+          f' ((c/=> ([number?] [even? odd?]) pos?) f)]
+      (do-checks f'))))
 
 
 (defn constrained-inc [x] (inc x))
