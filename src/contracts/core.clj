@@ -34,14 +34,15 @@
     x))
 
 (defn gen-constrained-body [f post pre args]
-  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])]
+  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])
+        [normal-args ampersand rest-args] (partition-by #{'&} args)]
     `([~@args]
         (let [~pre-check-results ~(gen-check :pre pre)
               ;; contract can alter the values of args, so we rebind them
               ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)])
-                        args)
-              ~result (~f ~@args)]
-          (-> ~(gen-check :post {result post}) first val)))))
+                        (concat normal-args rest-args))
+              ~result (apply ~f ~@normal-args ~(or (first rest-args) []))]
+          ~(-> (gen-check :post {result post}) first val)))))
 
 (defmacro =>
   ([pre post]

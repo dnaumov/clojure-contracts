@@ -85,6 +85,13 @@
           f' ((c/=> ([number?] [even? odd?]) pos?) f)]
       (do-checks f'))))
 
+(fact "Contracts for variadic functions"
+  (let [f (fn [a b & more] (apply hash-map a b more))
+        f' ((c/=> [a b & more] {more (comp even? count)} map?) f)] 
+    (f' :a 1) => {:a 1}
+    (f' :a 1 :b 2) => {:a 1 :b 2}
+    (f' :a 1 :foo) => (throws AssertionError #"Pre" #"even?")))
+
 
 (defn constrained-inc [x] (inc x))
 (defn constrained-dec [x] (dec x))
