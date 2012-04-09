@@ -47,10 +47,9 @@
 (defmacro =>
   ([pre post]
      (let [pre (cond
-                (combinator-expr? pre) (list [pre])
-                (symbol? pre) (list [pre])
-                (vector? pre) (list pre)
-                (list? pre) pre)
+                (and (list? pre) (every? vector? pre)) pre
+                (vector? pre) (list pre) 
+                :else (list [pre]))
            args (map #(vec (repeatedly (count %) (partial gensym "arg__")))
                      pre)
            pre (map zipmap args pre)]
