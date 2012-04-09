@@ -11,14 +11,14 @@
     (format "%s failed for var %s %n Expecting: %s %n Given: %s"
             type var (pr-str pred) (pr-str value))))
 
-(defn combinator-expr? [expr]
+(defn contract-expr? [expr]
   (and (seq? expr)
        (symbol? (first expr))
        (= (resolve (first expr)) #'=>)))
 
 (defn gen-check [type exprs+preds]
   (->> (for [[expr pred] exprs+preds]
-         (if (combinator-expr? pred)
+         (if (contract-expr? pred)
            `['~expr (~pred ~expr)]
            `['~expr (if (~pred ~expr)
                       ~expr
