@@ -9,17 +9,17 @@
     (inc' "1") => (throws AssertionError #"Pre")
     (inc' -1) => (throws AssertionError #"Post")
     (*' 2 3) => 6
-    (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
-    (*' 3 3) => (throws AssertionError #"Pre" #"even?")
+    (*' 2 2) => (throws AssertionError #"Pre" #"odd\?")
+    (*' 3 3) => (throws AssertionError #"Pre" #"even\?")
     (*' 2 -3) => (throws AssertionError #"Post")))
 
 (fact "Checking arbitrary expressions"
   (let [f (fn [x y] (- (+ x y)))
         f' ((c/=> [x y] {x number?, y number?, (+ x y) pos?} odd?) f)]
     (f' 1 2) => -3
-    (f' -1 -2) => (throws AssertionError #"Pre" #"pos?")
-    (f' "foo" 2) => (throws AssertionError #"Pre" #"number?")
-    (f' 1 1) => (throws AssertionError #"Post" #"odd?")))
+    (f' -1 -2) => (throws AssertionError #"Pre" #"pos\?")
+    (f' "foo" 2) => (throws AssertionError #"Pre" #"number\?")
+    (f' 1 1) => (throws AssertionError #"Post" #"odd\?")))
 
 (fact "Dependent contracts"
   (let [c (c/=> [a b] {} #(= % (* a b)))
@@ -36,8 +36,8 @@
 (fact "Contracts for functions with several args (without explicit args declaration)"
   (let [*' ((c/=> [even? odd?] pos?) *)]
     (*' 2 3) => 6
-    (*' 2 2) => (throws AssertionError #"Pre" #"odd?")
-    (*' 3 3) => (throws AssertionError #"Pre" #"even?")
+    (*' 2 2) => (throws AssertionError #"Pre" #"odd\?")
+    (*' 3 3) => (throws AssertionError #"Pre" #"even\?")
     (*' 2 -3) => (throws AssertionError #"Post")))
 
 (facts "Contracts for higher-order functions"
@@ -46,9 +46,9 @@
     (let [f (fn [x] (fn [y] (+ x y)))
           f' ((c/=> number? (c/=> even? pos?)) f)]
       ((f' 1) 2) => 3
-      ((f' "1") 2) => (throws AssertionError #"Pre" #"number?")
-      ((f' 1) 3) => (throws AssertionError #"Pre" #"even?")
-      ((f' 1) -10) => (throws AssertionError #"Post" #"pos?")))
+      ((f' "1") 2) => (throws AssertionError #"Pre" #"number\?")
+      ((f' 1) 3) => (throws AssertionError #"Pre" #"even\?")
+      ((f' 1) -10) => (throws AssertionError #"Post" #"pos\?")))
 
   (fact "Function accepting function as an argument"
     (let [apply-c (c/=> (c/=> number? pos?) string?)
@@ -56,18 +56,18 @@
           g (apply-c (fn [f] (f "foo")))
           h (apply-c (fn [f] (f 1)))]
       (f inc) => "2"
-      (f -) => (throws AssertionError #"Post" #"pos?")
-      (g inc) => (throws AssertionError #"Pre" #"number?")
-      (h inc) => (throws AssertionError #"Post" #"string?"))))
+      (f -) => (throws AssertionError #"Post" #"pos\?")
+      (g inc) => (throws AssertionError #"Pre" #"number\?")
+      (h inc) => (throws AssertionError #"Post" #"string\?"))))
 
 (letfn [(do-checks [f]
           (facts
             (f 10) => 9
-            (f "foo") => (throws AssertionError #"Pre" #"number?")
-            (f 0) => (throws AssertionError #"Post" #"pos?")
+            (f "foo") => (throws AssertionError #"Pre" #"number\?")
+            (f 0) => (throws AssertionError #"Post" #"pos\?")
             (f 2 3) => 6
-            (f 2 2) => (throws AssertionError #"Pre" #"odd?")
-            (f 3 3) => (throws AssertionError #"Pre" #"even?")
+            (f 2 2) => (throws AssertionError #"Pre" #"odd\?")
+            (f 3 3) => (throws AssertionError #"Pre" #"even\?")
             (f 2 -3) => (throws AssertionError #"Post")))]
 
   (fact "Contracts for multi-arity functions"
@@ -92,7 +92,7 @@
         g' ((c/=> [& xs] {xs (partial every? number?)} number?) +)]
     (f' :a 1) => {:a 1}
     (f' :a 1 :b 2) => {:a 1 :b 2}
-    (f' :a 1 :foo) => (throws AssertionError #"Pre" #"even?")
+    (f' :a 1 :foo) => (throws AssertionError #"Pre" #"even\?")
     (g' 1 2) => 3
     (g' 1 :foo) => (throws AssertionError #"Pre" #"every\? number\?")))
 
@@ -106,4 +106,4 @@
 
 (fact "provide-contracts and error messages"
   (constrained-inc "foo") => (throws AssertionError #"#'contracts.test.core/constrained-inc")
-  (constrained-dec "bar") => (throws AssertionError #"Pre" #"number?"))
+  (constrained-dec "bar") => (throws AssertionError #"Pre" #"number\?"))
