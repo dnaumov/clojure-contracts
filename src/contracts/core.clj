@@ -34,8 +34,11 @@
     x))
 
 (defn gen-constrained-body [f post pre args]
-  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])
-        [normal-args ampersand rest-args] (partition-by #{'&} args)]
+  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"]) 
+        [normal-args [maybe-amp :as maybe-rest]] (split-with #(not= % '&) args)
+        rest-args (if (= '& maybe-amp)
+                    (next maybe-rest)
+                    maybe-rest)]
     `([~@args]
         (let [~pre-check-results ~(gen-check :pre pre)
               ;; contract can alter the values of args, so we rebind them
@@ -48,7 +51,7 @@
   ([pre post]
      (let [pre (cond
                 (and (list? pre) (every? vector? pre)) pre
-                (vector? pre) (list pre) 
+                (vector? pre) (list pre)
                 :else (list [pre]))
            args (map #(vec (repeatedly (count %) (partial gensym "arg__")))
                      pre)

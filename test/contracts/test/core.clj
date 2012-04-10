@@ -87,10 +87,14 @@
 
 (fact "Contracts for variadic functions"
   (let [f (fn [a b & more] (apply hash-map a b more))
-        f' ((c/=> [a b & more] {more (comp even? count)} map?) f)] 
+        f' ((c/=> [a b & more] {more (comp even? count)} map?) f)
+        g (fn [& numbers] (apply + numbers))
+        g' ((c/=> [& xs] {xs (partial every? number?)} number?) +)]
     (f' :a 1) => {:a 1}
     (f' :a 1 :b 2) => {:a 1 :b 2}
-    (f' :a 1 :foo) => (throws AssertionError #"Pre" #"even?")))
+    (f' :a 1 :foo) => (throws AssertionError #"Pre" #"even?")
+    (g' 1 2) => 3
+    (g' 1 :foo) => (throws AssertionError #"Pre" #"every\? number\?")))
 
 
 (defn constrained-inc [x] (inc x))
