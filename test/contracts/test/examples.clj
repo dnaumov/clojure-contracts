@@ -1,5 +1,6 @@
 ;; This tutorial will give you a brief introduction to contract
-;; programming and overview of clojure-contracts facilities.
+;; programming and an overview of the clojure-contracts
+;; facilities. It's better if you'd start a REPL and follow along.
 
 
 ;;; # Contract programming
@@ -238,7 +239,7 @@
         number?))
 
 ;; We've replaced `fn?` predicate with another `c/=>` call. That's
-;; what higher-order contract is: here, in will ensure that the given
+;; what higher-order contract is: here, it will ensure that the given
 ;; function takes a number and returns a number. Let's try it in
 ;; action:
 
@@ -249,7 +250,8 @@
                                          #"Given: \"4\""))
 
 ;; That's much clearer: contract system tells the caller that his
-;; function is expected to return a number, but returns "4" instead.
+;; function is expected to return a number, but returns the string "4"
+;; instead.
 
 
 ;;; ## Checking arbitrary expressions.
@@ -279,23 +281,22 @@
 ;; mean](http://en.wikipedia.org/wiki/Harmonic_mean) of two
 ;; numbers. If you have read the definiton carefully, you should
 ;; noticed that "x and y are numbers" is not the only requirement for
-;; this function; another one is that one number must not be an
-;; additive inverse of the other, i.e. x can not be equal -y, or we
-;; will got an exception complaining that it's impossible to divide by
-;; zero.
+;; this function; they both are also can not be zero, and their sum
+;; can not be zero too. Otherwise, we will got an exception
+;; complaining that it's impossible to divide by zero.
 
 ;; So, let's write down our conclusions:
 
 (provide-contract harmonic-mean
   (c/=> [x y]
-        {x number?, y number?, (+ x y) (complement zero?)}
+        {x number?, y number?, (+ x y) (complement zero?)} 
         number?))
 
 ;; As you can see, this time slightly different syntax is used. First,
-;; an additional argument representing an arguments to the function is
-;; given to `=>`. Second, we use a map as a precondition form. Keys of
+;; an additional argument representing the function's arguments is
+;; given to the `=>`. Second, we use a map as a precondition form. Keys of
 ;; this map are expressions to check, and values are predicates which
-;; will be checked against this expressions. See how it works:
+;; will be checked against the expressions. See how it works:
 
 (fact
   (harmonic-mean 10 30) => 15
@@ -330,7 +331,7 @@
 ;; postcondition to depend on the function's arguments. It allows us
 ;; to express in code statements like "return value must be greater
 ;; than sum of the arguments" or, for example, "the function returns
-;; its argument unmodified if it satisfies certain
+;; the argument unmodified if it satisfies certain
 ;; conditions". Contracts with such postconditions are called
 ;; *dependent contracts*. As an example, let's implement the function
 ;; that computes the [arithmetic
@@ -339,7 +340,7 @@
 ;; equal to the [geometric
 ;; mean](http://en.wikipedia.org/wiki/Geometric_mean) of the same
 ;; numbers, or, in other words, that x+y divided by 2 is >= square
-;; root of x*y (this fact is known as an [AM-GM
+;; root of x*y (this fact is known as [AM-GM
 ;; inequality](http://en.wikipedia.org/wiki/Inequality_of_arithmetic_and_geometric_means)).
 
 ;; Here is the function:
@@ -382,3 +383,163 @@
 
 ;;; ## Protocols, multimethods and beyond.
 
+;; **Warning: features described in this section are not implemented yet.**
+
+;; Features discussed in the previous section open exciting
+;; possibilities, but things become even more interesting when we
+;; realize that contracts don't limited to be applied to normal
+;; functions; nothing prevents us from associating a contract with the
+;; generic function, such as a protocol method or even a
+;; multimethod. Thus, we're able to specify an interface which all
+;; implementations must to comply with, and it's possible to make such
+;; an interface as specific as we need. To illustrate this point,
+;; let's consider a concrete example.
+
+;; In clojure, the primary tool for creating abstractions is
+;; protocols. For instance, one could create a protocol called
+;; `Movement`, with methods `forward` and `back`. By implementing this
+;; protocol, an object says: "I know how to move back and forward; you
+;; can ask me to do so, and I'll take care of the details". It works
+;; fine, but is quite permissive: a person declaring the protocol
+;; can't force the implementor to follow certain *semantics* (that is,
+;; it's impossible to ensure that object implementing the protocol
+;; really *knows* how to move back and forward). For example, if the
+;; `Movement` would have a third method called `ahead?`, it'd
+;; reasonable for the owner of the protocol to declare that object
+;; after moving forward is `ahead?` of the object before the
+;; move. Fortunately, clojure's approach to state and identity
+;; combined with clojure-contracts makes it easy to do so. Consider
+;; the following definitions:
+
+(defprotocol Movement
+  (forward [this])
+  (backward [this])
+  (ahead? [this that]))
+
+(provide-contracts
+ (forward (c/=> [this]
+                {this (partial satisfies? Movement)}
+                (fn [result]
+                  (ahead? result this))))
+ (backward (c/=> [this]
+                 {this (partial satisfies? Movement)}
+                 (fn [result]
+                   (ahead? this result)))))
+
+;; Notice that we've used `provide-contracts` this time, as it allows
+;; to specify contracts for several functions at once. All the rest of
+;; contract definiton is pretty straightforward. Now, let's implement
+;; the protocol:
+
+(defrecord TheGood [position]
+  Movement
+  (forward [this] (update-in this [:position] inc))
+  (backward [this] (update-in this [:position] dec))
+  (ahead? [this that] (> position (:position that))))
+
+(defrecord TheBad [position]
+  Movement
+  (forward [this] this)
+  (backward [this] this)
+  (ahead? [this that] false))
+
+;; And check how it works:
+
+(facts "about the life in the one-dimensional world."
+  (let [good (TheGood. 1)
+        bad (TheBad. 1)]
+    (ahead? (forward good) (backward good)) => true
+    (forward bad) => (throws AssertionError)
+    (backward bad) => (throws AssertionError)))
+
+;; As you can see, the bad implementation doesn't fit the interface we
+;; defined for `Movement`, so any attempts to call the protocol
+;; functions on it will be thwarted by the contract system.
+
+;; But the protocols is not the only way to handle polymorphism in
+;; clojure. The other technique is to use multimethods, which allow
+;; to handle complex logic of implementation selection.
+
+;; As you remember, we've implemented three different types of means
+;; over this tutorial: harmonic, arithmetic and geometric ones. It may
+;; be reasonable to create a generic function for computation of mean,
+;; and let user to choose dynamically which concrete type is needed in
+;; each case. The use of multimethods also keep the whole thing open,
+;; allowing to add new types of mean later. Important thing is that by
+;; definition of the mean it must be smaller than the greatest of the
+;; given numbers and greater than the smallest one. It's easier to
+;; show you the code:
+
+(def ^:dynamic *type-of-mean*)
+
+(defmulti mean (fn [& _] *type-of-mean*)) 
+
+(provide-contract mean
+  (c/=> [x y]
+        {x number?, y number?}
+        (fn [res]
+          (< (min x y) res (max x y)))))
+
+;; Here, we define the multimethod with dispatch on dynamic var, and
+;; provide the appropriate contract. Let's add some implementations
+;; and check how they work:
+
+(comment ;; ** TODO **
+  (defmethod mean :arithmetic [x y]
+   (/ (+ x y) 2))
+
+ (defmethod mean :geometric [x y]
+   (Math/sqrt (* x y)))
+
+ (defmethod mean :broken [x y]
+   (+ x y)))
+
+(future-fact "The broken is, well, broken."
+  (binding [*type-of-mean* :arithmetic]
+    (mean 10 20) => 15)
+  (binding [*type-of-mean* :broken]
+    (mean 10 20) => (throws AssertionError
+                            #"Expecting:"
+                            #"\(fn \[res\] \(< \(min x y\) res \(max x y\)\)\)"
+                            #"Given: 30")))
+
+;; As with protocols, the attempt to call incorrect implementation
+;; will fail, keeping the interface intact.
+
+
+;;; ## Parting words.
+
+;; In the end of this tutorial, I would like to give some advices on
+;; how to write your own contracts:
+
+;; - Remember that contracts is not a type declarations; don't limit
+;; yourself to type predicates. Instead, describe any conditions which
+;; are essential for proper functioning of your code.
+
+;; - On the other hand, don't get too specific. Don't let
+;; postconditions to duplicate the definition of your functions. In
+;; general, think of contracts as a form of documentation - in the
+;; first place, they should be helpful for the other people.
+
+;; - Contracts are **not** a replacement for input data checking! Your
+;; program must also work with contracts turned off!
+
+;; - If you are writing a library, constrain all your public functions
+;; carefully, so the user of your library could use the contracts as
+;; an additional source of documentation and get clear error messages
+;; if something goes wrong.
+
+;; - Place your `provide-contracts` forms in the very end of each
+;; file.
+
+;; - Prefer contracts without explicit arguments declaration whenever
+;; it's possible.
+
+;; - Don't be shy to define a function to use in contracts declaration
+;; if it'd make the latter more readable.
+
+
+;; That's all what I want to tell you in this tutorial. Now go
+;; and write some contracts!
+
+;; Copyright (C) 2012 Dmitri Naumov
