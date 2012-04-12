@@ -43,7 +43,7 @@
 ;; make sure that all provided examples are correct and working with the
 ;; current version of clojure-contracts.
 
-(ns contracts.test.examples
+(ns contracts.test.tutorial
   (:use [contracts.core :only [provide-contract provide-contracts] :as c]
         [contracts.preds :only [coll-of boolean?]]
         midje.sweet))
@@ -126,9 +126,11 @@
 
 ;; Now we're trying to execute it and...
 
+;.;. Before the reward there must be labor. You plant before you
+;.;. harvest. You sow in tears before you reap joy. -- Ransom
 (fact "What a shame!"
   (factorial 1) => (throws AssertionError
-                           #"Postcondition failed for var #'contracts.test.examples/factorial"
+                           #"Postcondition failed for var #'contracts.test.tutorial/factorial"
                            #"Expecting: pos?"
                            #"Given: 0"))
 
@@ -199,7 +201,7 @@
 (fact
   (sum [1 2 3]) => 6
   (sum [1 2 :boom]) => (throws AssertionError
-                               #"Precondition failed for var #'contracts.test.examples/sum"
+                               #"Precondition failed for var #'contracts.test.tutorial/sum"
                                #"Expecting: \(coll-of number\?\)"
                                #"Given: \[1 2 :boom\]")
   (sum inc [1 2 3]) => 9
@@ -445,7 +447,7 @@
 
 ;; And check how it works:
 
-(facts "about the life in the one-dimensional world."
+(future-facts "about the life in the one-dimensional world."
   (let [good (TheGood. 1)
         bad (TheBad. 1)]
     (ahead? (forward good) (backward good)) => true
