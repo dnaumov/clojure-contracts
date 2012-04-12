@@ -1,5 +1,5 @@
 (ns contracts.test.core
-  (:use [contracts.core :as c :exclude [=>]] :reload)
+  (:require [contracts.core :as c] :reload)
   (:use [midje.sweet]))
 
 (fact "Simple contracts with explicit arguments"
@@ -101,7 +101,7 @@
 (defn constrained-inc [x] (inc x))
 (defn constrained-dec [x] (dec x))
 
-(provide-contracts
+(c/provide-contracts
  (constrained-inc (c/=> number? number?))
  (constrained-dec [number? => number?]))
 

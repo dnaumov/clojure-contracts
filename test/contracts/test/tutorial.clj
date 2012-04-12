@@ -187,7 +187,7 @@
 
 (provide-contract sum
   (c/=> ([(c/coll-of number?)]
-           [fn? (c/coll-of number?)])
+         [fn? (c/coll-of number?)])
         number?))
 
 ;; As you can see, we've wrapped preconditions for different arities
@@ -239,7 +239,7 @@
 
 (provide-contract sum
   (c/=> ([(c/coll-of number?)]
-           [(c/=> number? number?) (c/coll-of number?)])
+         [(c/=> number? number?) (c/coll-of number?)])
         number?))
 
 ;; We've replaced `fn?` predicate with another `c/=>` call. That's
@@ -358,7 +358,12 @@
   (c/=> [x y]
         {x (c/and number? (c/not neg?))
          y (c/and number? (c/not neg?))}
-        (partial <= (Math/sqrt (* x y)))))
+        (c/<= (Math/sqrt (* x y)))))
+
+;; Pay attention to the `c/<=` call; for your convenience,
+;; clojure-contracts includes curried versions of the most commonly
+;; used predicates from clojure.core, so it's possible to simply write
+;; `(c/<= ...)` instead of `(partial <= ...)`.
 
 ;; Of course, this contract will never be violated as long as valid
 ;; input is given to the function (which is ensured by preconditions)
@@ -422,11 +427,11 @@
 
 (provide-contracts
  (forward (c/=> [this]
-                {this (partial satisfies? Movement)}
+                {this (c/satisfies? Movement)}
                 (fn [result]
                   (ahead? result this))))
  (backward (c/=> [this]
-                 {this (partial satisfies? Movement)}
+                 {this (c/satisfies? Movement)}
                  (fn [result]
                    (ahead? this result)))))
 
@@ -488,7 +493,7 @@
 ;; provide the appropriate contract. Let's add some implementations
 ;; and check how they work:
 
-(comment ;; ** TODO **
+(comment
   (defmethod mean :arithmetic [x y]
    (/ (+ x y) 2))
 

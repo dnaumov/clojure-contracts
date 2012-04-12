@@ -80,4 +80,6 @@
         (for [clause clauses]
           `(provide-contract ~@clause))))
 
+
 (load "preds")
+(load "curried") ; this line should be commented out during development
