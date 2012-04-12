@@ -57,6 +57,7 @@
           h (apply-c (fn [f] (f 1)))]
       (f inc) => "2"
       (f -) => (throws AssertionError #"Post" #"pos\?")
+      (f "not a fn") => (throws AssertionError #"Pre" #"\(c/=\> number\? pos\?\)")
       (g inc) => (throws AssertionError #"Pre" #"number\?")
       (h inc) => (throws AssertionError #"Post" #"string\?"))))
 

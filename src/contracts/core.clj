@@ -17,15 +17,16 @@
        (= (resolve (first expr)) #'=>)))
 
 (defn gen-check [type exprs+preds]
-  (->> (for [[expr pred] exprs+preds]
-         (if (contract-expr? pred)
-           `['~expr (~pred ~expr)]
-           `['~expr (if (~pred ~expr)
-                      ~expr
-                      (throw (AssertionError.
-                              (report ~expr {:type ~type
-                                             :pred '~pred
-                                             :var ~(deref current-var)}))))]))
+  (->> (for [[expr pred] exprs+preds
+             :let [[cond ret] (if (contract-expr? pred)
+                                [`(fn? ~expr) `(~pred ~expr)]
+                                [`(~pred ~expr) expr])]]
+         `['~expr (if ~cond
+                    ~ret
+                    (throw (AssertionError.
+                            (report ~expr {:type ~type
+                                           :pred '~pred
+                                           :var ~(deref current-var)}))))])
        (into {})))
 
 (defn wrap-in-list-if [pred x]
@@ -34,7 +35,7 @@
     x))
 
 (defn gen-constrained-body [f post pre args]
-  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"]) 
+  (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])
         [normal-args [maybe-amp :as maybe-rest]] (split-with #(not= % '&) args)
         rest-args (if (= '& maybe-amp)
                     (next maybe-rest)
