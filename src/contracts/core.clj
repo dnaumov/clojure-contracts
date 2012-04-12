@@ -1,4 +1,6 @@
 (ns contracts.core
+  (:refer-clojure :exclude [and or not vector-of])
+  (:require [clojure.core :as clj])
   (:use [clojure.core.match :only [match]]))
 
 (declare =>)
@@ -12,9 +14,9 @@
             type var (pr-str pred) (pr-str value))))
 
 (defn contract-expr? [expr]
-  (and (seq? expr)
-       (symbol? (first expr))
-       (= (resolve (first expr)) #'=>)))
+  (clj/and (seq? expr)
+           (symbol? (first expr))
+           (= (resolve (first expr)) #'=>)))
 
 (defn gen-check [type exprs+preds]
   (->> (for [[expr pred] exprs+preds
@@ -45,13 +47,13 @@
               ;; contract can alter the values of args, so we rebind them
               ~@(mapcat (fn [arg] [arg `(get ~pre-check-results '~arg ~arg)])
                         (concat normal-args rest-args))
-              ~result (apply ~f ~@normal-args ~(or (first rest-args) []))]
+              ~result (apply ~f ~@normal-args ~(clj/or (first rest-args) []))]
           ~(-> (gen-check :post {result post}) first val)))))
 
 (defmacro =>
   ([pre post]
      (let [pre (cond
-                (and (list? pre) (every? vector? pre)) pre
+                (clj/and (list? pre) (every? vector? pre)) pre
                 (vector? pre) (list pre)
                 :else (list [pre]))
            args (map #(vec (repeatedly (count %) (partial gensym "arg__")))
@@ -77,3 +79,5 @@
   (cons `do
         (for [clause clauses]
           `(provide-contract ~@clause))))
+
+(load "preds")

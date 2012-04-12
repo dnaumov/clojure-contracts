@@ -44,8 +44,7 @@
 ;; current version of clojure-contracts.
 
 (ns contracts.test.tutorial
-  (:use [contracts.core :only [provide-contract provide-contracts] :as c]
-        [contracts.preds :only [coll-of boolean?]]
+  (:use [contracts.core :only [provide-contract provide-contracts] :as c] 
         midje.sweet))
 
 
@@ -122,12 +121,15 @@
   (reduce * (range x)))
 
 (provide-contract factorial
-  (c/=> (complement neg?) pos?))
+  (c/=> (c/not neg?) pos?))
 
-;; Now we're trying to execute it and...
+;; One thing to note is that `c/not` is exactly the same as clojure's
+;; `complement`, but is somewhat clearer to read. There is also
+;; `c/and` and `c/or`, which is similar to `every-pred` and `some-fn`,
+;; respectively.
 
-;.;. Before the reward there must be labor. You plant before you
-;.;. harvest. You sow in tears before you reap joy. -- Ransom
+;; Ok, now we're trying to execute it and...
+
 (fact "What a shame!"
   (factorial 1) => (throws AssertionError
                            #"Postcondition failed for var #'contracts.test.tutorial/factorial"
@@ -143,13 +145,13 @@
   (reduce * (range 1 (inc x))))
 
 (provide-contract factorial
-  (c/=> (complement neg?) pos?))
+  (c/=> (c/not neg?) pos?))
 
 (fact "Lesson learned."
   (factorial 1) => 1
   (factorial 0) => 1
   (factorial -1) => (throws AssertionError
-                            #"Expecting: \(complement neg\?\)"
+                            #"Expecting: \(c/not neg\?\)"
                             #"Given: -1"))
 
 ;; *Morale*:
@@ -184,13 +186,13 @@
 ;; for multi-arity functions' contracts is pretty predictable:
 
 (provide-contract sum
-  (c/=> ([(coll-of number?)]
-           [fn? (coll-of number?)])
+  (c/=> ([(c/coll-of number?)]
+           [fn? (c/coll-of number?)])
         number?))
 
 ;; As you can see, we've wrapped preconditions for different arities
 ;; in a list. Just like `pre` is a  shortened form of `[pre]`, `[pre]`
-;; itself is a shortand for `([pre])`. Also, note the `coll-of`
+;; itself is a shortand for `([pre])`. Also, note the `c/coll-of`
 ;; call. This higher-order function checks that the given argument is
 ;; a collection consisting of the items satisfying the given
 ;; predicate (in other words, the call above is rougly equivalent to
@@ -202,7 +204,7 @@
   (sum [1 2 3]) => 6
   (sum [1 2 :boom]) => (throws AssertionError
                                #"Precondition failed for var #'contracts.test.tutorial/sum"
-                               #"Expecting: \(coll-of number\?\)"
+                               #"Expecting: \(c/coll-of number\?\)"
                                #"Given: \[1 2 :boom\]")
   (sum inc [1 2 3]) => 9
   (sum 1 [2 3]) => (throws AssertionError
@@ -236,8 +238,8 @@
 ;; Let's correct our contract definition:
 
 (provide-contract sum
-  (c/=> ([(coll-of number?)]
-           [(c/=> number? number?) (coll-of number?)])
+  (c/=> ([(c/coll-of number?)]
+           [(c/=> number? number?) (c/coll-of number?)])
         number?))
 
 ;; We've replaced `fn?` predicate with another `c/=>` call. That's
@@ -291,7 +293,7 @@
 
 (provide-contract harmonic-mean
   (c/=> [x y]
-        {x number?, y number?, (+ x y) (complement zero?)} 
+        {x number?, y number?, (+ x y) (c/not zero?)} 
         number?))
 
 ;; As you can see, this time slightly different syntax is used. First,
@@ -303,7 +305,7 @@
 (fact
   (harmonic-mean 10 30) => 15
   (harmonic-mean 10 -10) => (throws AssertionError
-                                    #"Expecting: \(complement zero\?\)"
+                                    #"Expecting: \(c/not zero\?\)"
                                     #"Given: 0"))
 
 ;; One thing to note is that arguments' names in contract don't have
@@ -354,8 +356,8 @@
 
 (provide-contract arithmetic-mean
   (c/=> [x y]
-        {x (every-pred number? (complement neg?))
-         y (every-pred number? (complement neg?))}
+        {x (c/and number? (c/not neg?))
+         y (c/and number? (c/not neg?))}
         (partial <= (Math/sqrt (* x y)))))
 
 ;; Of course, this contract will never be violated as long as valid
@@ -367,7 +369,7 @@
   (Math/sqrt (* 8 2)) => 4.0
   (arithmetic-mean -1 -2) => (throws AssertionError
                                      #"Expecting:"
-                                     #"\(every-pred number\? \(complement neg\?\)\)"
+                                     #"\(c/and number\? \(c/not neg\?\)\)"
                                      #"Given: -1"))
 
 ;; If you think about it, the features we've just examined allows us
