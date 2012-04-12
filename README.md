@@ -11,7 +11,7 @@ in [Clojure](http://clojure.org).
 
 ## Usage
 
-See the **[tutorial](http://ubuntuone.com/0XjGCvBQviMz2qpaUUe5jW)**.
+See the **[tutorial](http://ubuntuone.com/4V1fhhEJnb14RGMloKIbIS)**.
 
 A quick example:
 
@@ -30,7 +30,7 @@ user> (foo nil) ;=>
  Given: nil
 ```
 
-See the [tutorial](http://ubuntuone.com/0XjGCvBQviMz2qpaUUe5jW)
+See the [tutorial](http://ubuntuone.com/4V1fhhEJnb14RGMloKIbIS)
 for details.
 
 
