@@ -97,6 +97,52 @@
     (g' 1 2) => 3
     (g' 1 :foo) => (throws AssertionError #"Pre" #"every\? number\?")))
 
+(fact "humanize-pred-expr"
+  (let [f #(c/humanize-pred-expr % :x)]
+    (f '(fn* [p1__17145#] (inc p1__17145#))) => '(inc :x)
+    (f '(fn* [p1__19793#] (* p1__19793# p1__19793#))) => '(* :x :x)
+    (f '(fn [x] (* x (+ 2 x)))) => '(* :x (+ 2 :x))
+    (f '(+ 1 2)) => nil
+    (f 'pred?) => nil))
+
+(facts "Mention the expression under check in the error message"
+
+  (fact "When args are declared"
+    (let [f ((c/=> [x y] {(+ x y) even?} pos?) +)
+          g ((c/=> [& args] {args (partial every? number?)} number?) +)]
+      (f 2 4) => 6
+      (f 2 3) => (throws AssertionError #"Pre" #"\(\+ x y\)" #"even\?" #"5")
+      (g 1 2 3) => 6
+      (g 1 "2" 3) => (throws AssertionError #"Pre" #"args" #"\(1 \"2\" 3\)")))
+
+  (fact "When they are not"
+    (let [f ((c/=> number? number?) inc)
+          g ((c/=> [pos? neg?] number?) +)]
+      (f 1) => 2
+      (f :foo) => (throws AssertionError #"Pre" #"first arg" #"number\?" #":foo")
+      (g 1 -1) => 0
+      (g 1 1) => (throws AssertionError #"Pre" #"second arg")))
+
+  (fact "When pred is anonymous function"
+    (let [f ((c/=> #(= % 5) number?) inc)
+          g ((c/=> [x y & more]
+                   {x #(= % 1) more #(= (count %) 2)}
+                   number?)
+             +)]
+      (f 5) => 6
+      (f 6) => (throws AssertionError #"Pre" #"\(= <first arg> 5\)")
+      (g 1 2 3 4) => 10
+      (g 0 1 2 3) => (throws AssertionError #"Pre" #"\(= x 1\)")
+      (g 1 2 3) => (throws AssertionError #"Pre" #"\(= \(count more\) 2\)")))
+
+  (fact "In postconditions"
+    (let [f ((c/=> number? even?) dec)
+          g ((c/=> number? #(= % 5)) inc)]
+      (f 3) => 2
+      (f 2) => (throws AssertionError #"Post" #"<result>")
+      (g 4) => 5
+      (g 5) => (throws AssertionError #"Post" #"\(= <result> 5\)"))))
+
 
 (defn constrained-inc [x] (inc x))
 (defn constrained-dec [x] (dec x))

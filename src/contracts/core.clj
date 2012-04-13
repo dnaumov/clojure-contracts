@@ -1,17 +1,43 @@
 (ns contracts.core
   (:refer-clojure :exclude [and or not vector-of])
   (:require [clojure.core :as clj])
-  (:use [clojure.core.match :only [match]]))
+  (:use [clojure.core.match :only [match]]
+        [clojure.walk :only [postwalk]]))
 
 (declare =>)
 (def current-var (atom nil))
 
-(defn report [value {:keys [type var pred]}]
-  (let [type (case type
-               :pre "Precondition"
-               :post "Postcondition")]
-    (format "%s failed for var %s %n Expecting: %s %n Given: %s"
-            type var (pr-str pred) (pr-str value))))
+(defn humanize-symbol-name [s]
+  (if (.startsWith s "%")
+    (format "<%s arg>"
+            (case s
+              ("%" "%1") "first"
+              "%2" "second"
+              "%3" "third"
+              (str (subs s 1) "th")))
+    s))
+
+
+(defn humanize-pred-expr [pred-expr checked-expr]
+  (match pred-expr ([(:or fn fn*) [arg] body] :seq)
+    (-> pred-expr
+        (nth 2)
+        (->> (postwalk #(if (= % arg) checked-expr %))))))
+
+(defn report [{:keys [type var pred expr value]}]
+  (let [humanized-expr (if (= type :post)
+                         "<result>"
+                         (humanize-symbol-name (pr-str expr)))
+        expecting (if-let [humanized-pred (humanize-pred-expr pred (symbol humanized-expr))]
+                    (pr-str humanized-pred)
+                    (format "%s is: %s" humanized-expr pred))]
+    (format "%s failed for %s %n Expecting: %s %n Given: %s"
+            (case type
+              :pre "Precondition"
+              :post "Postcondition")
+            (clj/or var "<undefined>")
+            expecting
+            (pr-str value))))
 
 (defn contract-expr? [expr]
   (clj/and (seq? expr)
@@ -26,9 +52,11 @@
          `['~expr (if ~cond
                     ~ret
                     (throw (AssertionError.
-                            (report ~expr {:type ~type
-                                           :pred '~pred
-                                           :var ~(deref current-var)}))))])
+                            (report {:value ~expr
+                                     :type ~type
+                                     :pred '~pred
+                                     :expr '~expr
+                                     :var ~(deref current-var)}))))])
        (into {})))
 
 (defn wrap-in-list-if [pred x]
@@ -56,7 +84,11 @@
                 (clj/and (list? pre) (every? vector? pre)) pre
                 (vector? pre) (list pre)
                 :else (list [pre]))
-           args (map #(vec (repeatedly (count %) (partial gensym "arg__")))
+           args (map #(if (= 1 (count %))
+                        [(symbol "%")]
+                        (->> (range 1 (inc (count %)))
+                             (map (fn [i] (symbol (str "%" i))) )
+                             vec))
                      pre)
            pre (map zipmap args pre)]
        `(=> ~args ~pre ~post)))
