@@ -1,6 +1,6 @@
-;; This tutorial will give you a brief introduction to contract
-;; programming and an overview of the clojure-contracts
-;; facilities. It's better if you'd start a REPL and follow along.
+;; This tutorial gives you a brief introduction to contract
+;; programming with clojure-contracts. It's better if you'd start a
+;; REPL and follow along.
 
 
 ;;; # Contract programming
@@ -72,7 +72,7 @@
   (constrained-inc 1) => 2
   (inc nil) => (throws NullPointerException)
   (constrained-inc nil) => (throws AssertionError
-                                   #"Expecting: number?"
+                                   #"Expecting: <first arg> is: number?"
                                    #"Given: nil"))
 
 ;; Here, `fact` is the Midje's macro which groups together a bunch of
@@ -95,7 +95,7 @@
     (+ "1" 2) => (throws ClassCastException
                          "java.lang.String cannot be cast to java.lang.Number")
     (constrained-plus "1" 2) => (throws AssertionError
-                                        #"Expecting: number?"
+                                        #"Expecting: <first arg> is: number?"
                                         #"Given: \"1\"")))
 
 ;; Notice that double opening parens - we created anonymous contract
@@ -132,8 +132,8 @@
 
 (fact "What a shame!"
   (factorial 1) => (throws AssertionError
-                           #"Postcondition failed for var #'contracts.test.tutorial/factorial"
-                           #"Expecting: pos?"
+                           #"Postcondition failed for #'contracts.test.tutorial/factorial"
+                           #"Expecting: <result> is: pos?"
                            #"Given: 0"))
 
 ;; Oops! Contract system complains that function have violated its
@@ -151,7 +151,7 @@
   (factorial 1) => 1
   (factorial 0) => 1
   (factorial -1) => (throws AssertionError
-                            #"Expecting: \(c/not neg\?\)"
+                            #"Expecting: <first arg> is: \(c/not neg\?\)"
                             #"Given: -1"))
 
 ;; *Morale*:
@@ -203,12 +203,12 @@
 (fact
   (sum [1 2 3]) => 6
   (sum [1 2 :boom]) => (throws AssertionError
-                               #"Precondition failed for var #'contracts.test.tutorial/sum"
-                               #"Expecting: \(c/coll-of number\?\)"
+                               #"Precondition failed for #'contracts.test.tutorial/sum"
+                               #"Expecting: <first arg> is: \(c/coll-of number\?\)"
                                #"Given: \[1 2 :boom\]")
   (sum inc [1 2 3]) => 9
   (sum 1 [2 3]) => (throws AssertionError
-                           #"Expecting: fn\?"
+                           #"Expecting: <first arg> is: fn\?"
                            #"Given: 1"))
 
 ;; Seems fine... but is it so? Consider the following code:
@@ -250,7 +250,7 @@
 (fact "Functional nirvana."
   (sum str [4 8 15 16 23 42]) => (throws AssertionError
                                          #"Postcondition failed"
-                                         #"Expecting: number\?"
+                                         #"Expecting: <result> is: number\?"
                                          #"Given: \"4\""))
 
 ;; That's much clearer: contract system tells the caller that his
@@ -305,7 +305,7 @@
 (fact
   (harmonic-mean 10 30) => 15
   (harmonic-mean 10 -10) => (throws AssertionError
-                                    #"Expecting: \(c/not zero\?\)"
+                                    #"Expecting: \(\+ x y\) is: \(c/not zero\?\)"
                                     #"Given: 0"))
 
 ;; One thing to note is that arguments' names in contract don't have
@@ -325,7 +325,7 @@
                               hash-map)]
     (constrained-hash-map :a 1 :b 2) => {:a 1 :b 2}
     (constrained-hash-map :a 1 :boo) => (throws AssertionError
-                                                #"Expecting: \(comp even\? count\)"
+                                                #"Expecting: keys\+vals is: \(comp even\? count\)"
                                                 #"Given: \(:a 1 :boo\)")))
 
 
@@ -373,7 +373,7 @@
   (arithmetic-mean 8 2) => 5
   (Math/sqrt (* 8 2)) => 4.0
   (arithmetic-mean -1 -2) => (throws AssertionError
-                                     #"Expecting:"
+                                     #"Expecting: x is:"
                                      #"\(c/and number\? \(c/not neg\?\)\)"
                                      #"Given: -1"))
 
