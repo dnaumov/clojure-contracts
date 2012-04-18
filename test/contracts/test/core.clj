@@ -154,3 +154,20 @@
 (fact "provide-contracts and error messages"
   (constrained-inc "foo") => (throws AssertionError #"#'contracts.test.core/constrained-inc")
   (constrained-dec "bar") => (throws AssertionError #"Pre" #"number\?"))
+
+
+(def x (atom 1))
+(def ^:dynamic y 1)
+
+(c/provide-contracts
+ (x number?)
+ (#'y number?))
+
+(fact "Invariants"
+  (swap! x inc) => 2
+  (reset! x "str") => (throws AssertionError)
+  (alter-var-root #'y inc) => 2
+  (binding [y "str"]) => (throws AssertionError)
+  (against-background
+    (before :facts (reset! x 1))
+    (before :facts (alter-var-root #'y (constantly 1)))))

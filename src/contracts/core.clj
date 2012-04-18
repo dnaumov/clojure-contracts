@@ -8,13 +8,13 @@
 (def current-var (atom nil))
 
 (defn humanize-symbol-name [s]
-  (if (.startsWith s "%")
-    (format "<%s arg>"
-            (case s
-              ("%" "%1") "first"
-              "%2" "second"
-              "%3" "third"
-              (str (subs s 1) "th")))
+  (condp #(.startsWith %2 %1) s
+    "%" (format "<%s arg>" (case s
+                             ("%" "%1") "first"
+                             "%2" "second"
+                             "%3" "third"
+                             (str (subs s 1) "th")))
+    "(clojure.core/deref " (str "@" (subs s 20 (dec (count s))))
     s))
 
 
@@ -34,29 +34,38 @@
     (format "%s failed for %s %n Expecting: %s %n Given: %s"
             (case type
               :pre "Precondition"
-              :post "Postcondition")
+              :post "Postcondition"
+              :invariant "Invariant")
             (clj/or var "<undefined>")
             expecting
             (pr-str value))))
 
-(defn contract-expr? [expr]
+(defn fn-contract-expr? [expr]
   (clj/and (seq? expr)
            (symbol? (first expr))
            (= (resolve (first expr)) #'=>)))
 
+;; TODO: rename
+(defn gen-check* [{:keys [type cond return-val pred expr]}]
+  `(if ~cond
+     ~return-val
+     (throw (AssertionError.
+             (report {:value ~expr
+                      :type ~type
+                      :pred '~pred
+                      :expr '~expr
+                      :var ~(deref current-var)})))))
+
 (defn gen-check [type exprs+preds]
   (->> (for [[expr pred] exprs+preds
-             :let [[cond ret] (if (contract-expr? pred)
+             :let [[cond ret] (if (fn-contract-expr? pred)
                                 [`(fn? ~expr) `(~pred ~expr)]
                                 [`(~pred ~expr) expr])]]
-         `['~expr (if ~cond
-                    ~ret
-                    (throw (AssertionError.
-                            (report {:value ~expr
-                                     :type ~type
-                                     :pred '~pred
-                                     :expr '~expr
-                                     :var ~(deref current-var)}))))])
+         `['~expr ~(gen-check* {:cond cond
+                                :return-val ret
+                                :expr expr
+                                :type type
+                                :pred pred})])
        (into {})))
 
 (defn wrap-in-list-if [pred x]
@@ -99,13 +108,32 @@
        `(fn [~f]
           (fn ~@(map (partial gen-constrained-body f post) pre arglist))))))
 
-(defmacro provide-contract [sym contract]
-  (letfn [(normalize [expr]
-            (match expr
-              [pre '=> post] (list* `=> (map normalize [pre post]))
-              :else expr))]
-    (reset! current-var (resolve sym))
-    `(alter-var-root (var ~sym) ~(normalize contract))))
+(defn normalize-contract [expr]
+  (match expr
+    [pre '=> post] (list* `=> (map normalize-contract [pre post]))
+    :else expr))
+
+(defn gen-iref-contract [target pred]
+  (let [newval (gensym "newval")]
+    `(fn [~newval]
+       ~(gen-check* {:type :invariant
+                     :cond `(~pred ~newval)
+                     :return-val true
+                     :pred pred
+                     :expr `(deref ~target)}))))
+
+(defmacro provide-contract [target contract]
+  (let [contract (normalize-contract contract)
+        target-var (if (symbol? target)
+                     (resolve target)
+                     target)]
+    (reset! current-var target-var)
+    `(do ~(cond
+           (fn-contract-expr? contract)
+           `(alter-var-root (var ~target) ~contract)
+           :else
+           `(set-validator! ~target ~(gen-iref-contract target contract)))
+         (reset! current-var nil))))
 
 (defmacro provide-contracts [& clauses]
   (cons `do
