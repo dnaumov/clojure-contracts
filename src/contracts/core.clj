@@ -14,6 +14,7 @@
                              "%2" "second"
                              "%3" "third"
                              (str (subs s 1) "th")))
+    "(clojure.core/deref (var " (subs s 25 (- (count s) 2))
     "(clojure.core/deref " (str "@" (subs s 20 (dec (count s))))
     s))
 
@@ -46,11 +47,11 @@
            (= (resolve (first expr)) #'=>)))
 
 ;; TODO: rename
-(defn gen-check* [{:keys [type cond return-val pred expr]}]
+(defn gen-check* [{:keys [type cond return-val pred expr value]}]
   `(if ~cond
      ~return-val
      (throw (AssertionError.
-             (report {:value ~expr
+             (report {:value ~value
                       :type ~type
                       :pred '~pred
                       :expr '~expr
@@ -64,6 +65,7 @@
          `['~expr ~(gen-check* {:cond cond
                                 :return-val ret
                                 :expr expr
+                                :value expr
                                 :type type
                                 :pred pred})])
        (into {})))
@@ -120,7 +122,8 @@
                      :cond `(~pred ~newval)
                      :return-val true
                      :pred pred
-                     :expr `(deref ~target)}))))
+                     :expr `(deref ~target)
+                     :value newval}))))
 
 (defmacro provide-contract [target contract]
   (let [contract (normalize-contract contract)

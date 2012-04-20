@@ -156,18 +156,38 @@
   (constrained-dec "bar") => (throws AssertionError #"Pre" #"number\?"))
 
 
-(def x (atom 1))
-(def ^:dynamic y 1)
+(facts "Invariants"
 
-(c/provide-contracts
- (x number?)
- (#'y number?))
+  (fact "for Vars"
+    (against-background
+      (before :contents (do (def ^:dynamic a-var 1)
+                            (c/provide-contract #'a-var number?))))
 
-(fact "Invariants"
-  (swap! x inc) => 2
-  (reset! x "str") => (throws AssertionError)
-  (alter-var-root #'y inc) => 2
-  (binding [y "str"]) => (throws AssertionError)
-  (against-background
-    (before :facts (reset! x 1))
-    (before :facts (alter-var-root #'y (constantly 1)))))
+    (alter-var-root #'a-var inc) => 2
+    (alter-var-root #'a-var (constantly "nan"))
+    => (throws AssertionError
+               #"Invariant"
+               #"Expecting: a-var is: number?"
+               #"Given: \"nan\"")
+    (binding [a-var "str"]) => (throws AssertionError #"\"str\"")
+    (binding [a-var 1] (set! a-var "str")) => (throws AssertionError #"\"str\""))
+
+  (fact "for other IRefs"
+    (against-background
+      (before :contents (do (def x (atom 1))
+                            (def y (ref 1))
+                            (def z (agent 1))
+                            (c/provide-contracts
+                             (x number?) (y pos?) (z odd?)))))
+    (swap! x inc) => 2
+    (reset! x "str") => (throws AssertionError
+                                #"Invariant"
+                                #"Expecting: @x is: number?"
+                                #"\"str\"")
+
+    (dosync (alter y inc)) => 2
+    (dosync (alter y -)) => (throws AssertionError #"-2")
+
+    (do (send z -) (await z) @z) => -1
+    (do (send z inc) (Thread/sleep 100) (throw (agent-error z)))
+    => (throws AssertionError #"0")))
