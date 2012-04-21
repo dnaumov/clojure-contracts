@@ -38,7 +38,7 @@
     (*' 2 3) => 6
     (*' 2 2) => (throws AssertionError #"Pre" #"odd\?")
     (*' 3 3) => (throws AssertionError #"Pre" #"even\?")
-    (*' 2 -3) => (throws AssertionError #"Post")))
+    (*' 2 -3) => (throws AssertionError #"Post"))) 
 
 (facts "Contracts for higher-order functions"
 
@@ -96,6 +96,19 @@
     (f' :a 1 :foo) => (throws AssertionError #"Pre" #"even\?")
     (g' 1 2) => 3
     (g' 1 :foo) => (throws AssertionError #"Pre" #"every\? number\?")))
+
+(fact "Varargs without explicit declaration"
+  (let [+' ((c/=> [pos? & (partial every? number?)] number?) +)
+        -' ((c/=> [& (partial every? pos?)] number?) -)]
+    (+' 1 -1 2 -2) => 0
+    (+' 0 0 0) => (throws AssertionError #"Pre" #"pos\?")
+    (+' 1 2 3) => 6
+    (+' 1 2 3 :foo) => (throws AssertionError
+                               #"Pre"
+                               #"<rest-args>"
+                               #"\(partial every\? number\?\)")
+    (-' 1 2) => -1
+    (-' 1 -2) => (throws AssertionError #"Pre" #"\(partial every\? pos\?\)")))
 
 (fact "humanize-pred-expr"
   (let [f #(c/humanize-pred-expr % :x)]

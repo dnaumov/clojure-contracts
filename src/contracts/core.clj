@@ -9,6 +9,7 @@
 
 (defn humanize-symbol-name [s]
   (condp #(.startsWith %2 %1) s
+    "%&" "<rest-args>"
     "%" (format "<%s arg>" (case s
                              ("%" "%1") "first"
                              "%2" "second"
@@ -17,7 +18,6 @@
     "(clojure.core/deref (var " (subs s 25 (- (count s) 2))
     "(clojure.core/deref " (str "@" (subs s 20 (dec (count s))))
     s))
-
 
 (defn humanize-pred-expr [pred-expr checked-expr]
   (match pred-expr ([(:or fn fn*) [arg] body] :seq)
@@ -75,12 +75,19 @@
     (list x)
     x))
 
+(defn amp? [x]
+  (= x '&))
+
+(defn split-at-amp
+  "Returns [things-before-& things-after-&]"
+  [coll]
+  (let [[normal maybe-rest] (split-with (complement amp?) coll)]
+    [normal (when (amp? (first maybe-rest))
+              (next maybe-rest))]))
+
 (defn gen-constrained-body [f post pre args]
   (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])
-        [normal-args [maybe-amp :as maybe-rest]] (split-with #(not= % '&) args)
-        rest-args (if (= '& maybe-amp)
-                    (next maybe-rest)
-                    maybe-rest)]
+        [normal-args rest-args] (split-at-amp args)]
     `([~@args]
         (let [~pre-check-results ~(gen-check :pre pre)
               ;; contract can alter the values of args, so we rebind them
@@ -89,20 +96,37 @@
               ~result (apply ~f ~@normal-args ~(clj/or (first rest-args) []))]
           ~(-> (gen-check :post {result post}) first val)))))
 
+
+(defn normalize-pre
+  "Returns preconditions in the form ([pre ...] ...)"
+  [expr]
+  (cond
+   (clj/and (list? expr) (every? vector? expr)) expr
+   (vector? expr) (list expr)
+   :else (list [expr])))
+
+(defn build-numbered-args
+  "Given a coll of preconditions, returns a vector of symbols prefixed
+  by % (as those used in clojure's #(...))."
+  [pre]
+  (let [[normal-pre rest-pre] (split-at-amp pre)
+        normal-args (map (fn [i] (symbol (str "%" i)))
+                         (range 1 (inc (count normal-pre))))]
+    (vec (cond
+          (= 1 (count pre)) [(symbol "%")]
+          rest-pre (concat normal-args (map symbol ["&" "%&"])) ; %& becomes rest__17578# if quote it directly
+          :else normal-args))))
+
+(defn build-pre-map [args pre]
+  (zipmap (remove amp? args)
+          (remove amp? pre)))
+
 (defmacro =>
   ([pre post]
-     (let [pre (cond
-                (clj/and (list? pre) (every? vector? pre)) pre
-                (vector? pre) (list pre)
-                :else (list [pre]))
-           args (map #(if (= 1 (count %))
-                        [(symbol "%")]
-                        (->> (range 1 (inc (count %)))
-                             (map (fn [i] (symbol (str "%" i))) )
-                             vec))
-                     pre)
-           pre (map zipmap args pre)]
-       `(=> ~args ~pre ~post)))
+     (let [pre-list (normalize-pre pre)
+           args-list (map build-numbered-args pre-list)
+           pre-map (map build-pre-map args-list pre-list)]
+       `(=> ~args-list ~pre-map ~post)))
   ([args pre post]
      (let [arglist (wrap-in-list-if vector? args)
            pre (wrap-in-list-if map? pre)
