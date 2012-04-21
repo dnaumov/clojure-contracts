@@ -7,30 +7,48 @@
 (declare =>)
 (def current-var (atom nil))
 
-(defn humanize-symbol-name [s]
-  (condp #(.startsWith %2 %1) s
-    "%&" "<rest-args>"
-    "%" (format "<%s arg>" (case s
-                             ("%" "%1") "first"
-                             "%2" "second"
-                             "%3" "third"
-                             (str (subs s 1) "th")))
-    "(clojure.core/deref (var " (subs s 25 (- (count s) 2))
-    "(clojure.core/deref " (str "@" (subs s 20 (dec (count s))))
-    s))
+(defmacro match-s
+  "Like match, but also wraps every check in (... :seq)"
+  [expr & clauses]
+  (letfn [(wrap-in-seq [form]
+            (postwalk #(if (clj/and (list? %)
+                                    (clj/not (keyword? (first %))))
+                         (list % :seq)
+                         %)
+                      form))]
+    `(match ~expr ~@(->> clauses
+                         (partition 2)
+                         (map (fn [[q a]] [(wrap-in-seq q) a]))
+                         (apply concat)))))
 
-(defn humanize-pred-expr [pred-expr checked-expr]
-  (match pred-expr ([(:or fn fn*) [arg] body] :seq)
-    (-> pred-expr
-        (nth 2)
-        (->> (postwalk #(if (= % arg) checked-expr %))))))
+(defn humanize-checked-expr [expr]
+  (let [s (match-s expr
+            (deref (var x)) (name x)
+            (deref x) (str "@" (name x))
+            '%& "<rest-args>"
+            :else (pr-str expr))]
+    (if-not (.startsWith s "%")
+      s
+      (format "<%s arg>" (case s
+                           ("%" "%1") "first"
+                           "%2" "second"
+                           "%3" "third"
+                           (str (subs s 1) "th"))))))
+
+(defn humanize-pred-expr
+  "If expr is anonymous function, formats it's nicely, otherwise returns nil."
+  [pred-expr checked-expr]
+  (match-s pred-expr ((:or fn fn*) [arg] body)
+    (->> body
+         (postwalk #(if (= % arg) (symbol checked-expr) %))
+         pr-str)))
 
 (defn report [{:keys [type var pred expr value]}]
   (let [humanized-expr (if (= type :post)
                          "<result>"
-                         (humanize-symbol-name (pr-str expr)))
-        expecting (if-let [humanized-pred (humanize-pred-expr pred (symbol humanized-expr))]
-                    (pr-str humanized-pred)
+                         (humanize-checked-expr expr))
+        expecting (if-let [humanized-pred (humanize-pred-expr pred humanized-expr)]
+                    humanized-pred
                     (format "%s is: %s" humanized-expr pred))]
     (format "%s failed for %s %n Expecting: %s %n Given: %s"
             (case type

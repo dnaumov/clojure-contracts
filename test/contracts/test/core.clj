@@ -38,7 +38,7 @@
     (*' 2 3) => 6
     (*' 2 2) => (throws AssertionError #"Pre" #"odd\?")
     (*' 3 3) => (throws AssertionError #"Pre" #"even\?")
-    (*' 2 -3) => (throws AssertionError #"Post"))) 
+    (*' 2 -3) => (throws AssertionError #"Post")))
 
 (facts "Contracts for higher-order functions"
 
@@ -110,11 +110,18 @@
     (-' 1 2) => -1
     (-' 1 -2) => (throws AssertionError #"Pre" #"\(partial every\? pos\?\)")))
 
+(fact "humanize-checked-expr"
+  (c/humanize-checked-expr `@#'x) => "x"
+  (c/humanize-checked-expr `@x) => "@x"
+  (c/humanize-checked-expr (symbol "%&")) => "<rest-args>"
+  (c/humanize-checked-expr '%) => "<first arg>"
+  (c/humanize-checked-expr '(+ a b)) => "(+ a b)")
+
 (fact "humanize-pred-expr"
-  (let [f #(c/humanize-pred-expr % :x)]
-    (f '(fn* [p1__17145#] (inc p1__17145#))) => '(inc :x)
-    (f '(fn* [p1__19793#] (* p1__19793# p1__19793#))) => '(* :x :x)
-    (f '(fn [x] (* x (+ 2 x)))) => '(* :x (+ 2 :x))
+  (let [f #(c/humanize-pred-expr % "x")]
+    (f '(fn* [p1__17145#] (inc p1__17145#))) => "(inc x)"
+    (f '(fn* [p1__19793#] (* p1__19793# p1__19793#))) => "(* x x)"
+    (f '(fn [x] (* x (+ 2 x)))) => "(* x (+ 2 x))"
     (f '(+ 1 2)) => nil
     (f 'pred?) => nil))
 
