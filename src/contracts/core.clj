@@ -105,6 +105,8 @@
           (remove amp? pre)))
 
 (defmacro =>
+  ([post]
+     `(=> [] ~post))
   ([pre post]
      (let [pre-list (normalize-pre pre)
            args-list (map build-numbered-args pre-list)
