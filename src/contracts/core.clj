@@ -1,25 +1,11 @@
 (ns contracts.core
   (:refer-clojure :exclude [and or not vector-of])
   (:require [clojure.core :as clj])
-  (:use [clojure.core.match :only [match]]
+  (:use contracts.utils
+        [clojure.core.match :only [match]]
         [clojure.walk :only [postwalk]]))
 
-(declare =>)
 (def current-var (atom nil))
-
-(defmacro match-s
-  "Like match, but also wraps every check in (... :seq)"
-  [expr & clauses]
-  (letfn [(wrap-in-seq [form]
-            (postwalk #(if (clj/and (list? %)
-                                    (clj/not (keyword? (first %))))
-                         (list % :seq)
-                         %)
-                      form))]
-    `(match ~expr ~@(->> clauses
-                         (partition 2)
-                         (map (fn [[q a]] [(wrap-in-seq q) a]))
-                         (apply concat)))))
 
 (defn humanize-checked-expr [expr]
   (let [s (match-s expr
@@ -59,11 +45,6 @@
             expecting
             (pr-str value))))
 
-(defn fn-contract-expr? [expr]
-  (clj/and (seq? expr)
-           (symbol? (first expr))
-           (= (resolve (first expr)) #'=>)))
-
 ;; TODO: rename
 (defn gen-check* [{:keys [type cond return-val pred expr value]}]
   `(if ~cond
@@ -88,21 +69,6 @@
                                 :pred pred})])
        (into {})))
 
-(defn wrap-in-list-if [pred x]
-  (if (pred x)
-    (list x)
-    x))
-
-(defn amp? [x]
-  (= x '&))
-
-(defn split-at-amp
-  "Returns [things-before-& things-after-&]"
-  [coll]
-  (let [[normal maybe-rest] (split-with (complement amp?) coll)]
-    [normal (when (amp? (first maybe-rest))
-              (next maybe-rest))]))
-
 (defn gen-constrained-body [f post pre args]
   (let [[pre-check-results result] (map gensym ["pre-check-results" "result"])
         [normal-args rest-args] (split-at-amp args)]
@@ -113,7 +79,6 @@
                         (concat normal-args rest-args))
               ~result (apply ~f ~@normal-args ~(clj/or (first rest-args) []))]
           ~(-> (gen-check :post {result post}) first val)))))
-
 
 (defn normalize-pre
   "Returns preconditions in the form ([pre ...] ...)"
