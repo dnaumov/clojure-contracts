@@ -137,11 +137,14 @@
 
   (fact "When they are not"
     (let [f ((c/=> number? number?) inc)
-          g ((c/=> [pos? neg?] number?) +)]
+          g ((c/=> [pos? neg?] number?) +)
+          h ((c/=> [& (partial every? even?)] number?) *)]
       (f 1) => 2
       (f :foo) => (throws AssertionError #"Pre" #"first arg" #"number\?" #":foo")
       (g 1 -1) => 0
-      (g 1 1) => (throws AssertionError #"Pre" #"second arg")))
+      (g 1 1) => (throws AssertionError #"Pre" #"second arg")
+      (h 2 4) => 8
+      (h 2 3 4) => (throws AssertionError #"Pre" #"<rest-args>")))
 
   (fact "When pred is anonymous function"
     (let [f ((c/=> #(= % 5) number?) inc)
