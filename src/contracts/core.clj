@@ -5,7 +5,7 @@
         [clojure.core.match :only [match]]
         [clojure.walk :only [postwalk]]))
 
-(def current-var (atom nil))
+(def current-target (atom nil))
 
 (defn humanize-checked-expr [expr]
   (let [s (match-s expr
@@ -54,7 +54,7 @@
                       :type ~type
                       :pred '~pred
                       :expr '~expr
-                      :var ~(deref current-var)})))))
+                      :var ~(deref current-target)})))))
 
 (defn gen-check [type exprs+preds]
   (->> (for [[expr pred] exprs+preds
@@ -136,16 +136,16 @@
 
 (defmacro provide-contract [target contract]
   (let [contract (normalize-contract contract)
-        target-var (if (symbol? target)
-                     (resolve target)
-                     target)]
-    (reset! current-var target-var)
+        resolved-target (if (symbol? target)
+                          (resolve target)
+                          target)]
+    (reset! current-target resolved-target)
     `(do ~(cond
            (fn-contract-expr? contract)
            `(alter-var-root (var ~target) ~contract)
            :else
            `(set-validator! ~target ~(gen-iref-contract target contract)))
-         (reset! current-var nil))))
+         (reset! current-target nil))))
 
 (defmacro provide-contracts [& clauses]
   (cons `do
