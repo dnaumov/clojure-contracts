@@ -134,6 +134,37 @@
                      :expr `(deref ~target)
                      :value newval}))))
 
+(defprotocol Constrained
+  (check-constraint [this]))
+
+(defn apply-record-contract [f]
+  (fn [& args]
+    (let [result (apply f args)]
+      (if (satisfies? Constrained result)
+        (check-constraint result)
+        result))))
+
+(comment
+  (doseq [v [#'assoc #'dissoc #'assoc-in #'update-in
+             #'conj #'into #'merge #'merge-with]]
+    (alter-var-root v apply-record-contract)))
+
+(defn gen-constrain-record [class pred]
+  (let [name (.getSimpleName class)
+        this (gensym "this")
+        [factory map-factory] (map #(symbol (str % name)) ["->" "map->"])]
+    `(do (alter-var-root (var ~factory) apply-record-contract)
+         (alter-var-root (var ~map-factory) apply-record-contract)
+         (extend ~class
+           Constrained
+           {:check-constraint (fn [~this]
+                                ~(gen-check* {:type :invariant
+                                              :cond `(~pred ~this)
+                                              :return-val this
+                                              :pred pred
+                                              :expr (symbol "<record>")
+                                              :value this}))}))))
+
 (defmacro provide-contract [target contract]
   (let [contract (normalize-contract contract)
         resolved-target (if (symbol? target)
@@ -141,10 +172,9 @@
                           target)]
     (reset! current-target resolved-target)
     `(do ~(cond
-           (fn-contract-expr? contract)
-           `(alter-var-root (var ~target) ~contract)
-           :else
-           `(set-validator! ~target ~(gen-iref-contract target contract)))
+           (fn-contract-expr? contract) `(alter-var-root (var ~target) ~contract)
+           (class? resolved-target) (gen-constrain-record resolved-target contract)
+           :else `(set-validator! ~target ~(gen-iref-contract target contract)))
          (reset! current-target nil))))
 
 (defmacro provide-contracts [& clauses]
@@ -154,4 +184,4 @@
 
 
 (load "preds")
-(load "curried") ; this line should be commented out during development
+;; (load "curried") ; this line should be commented out during development

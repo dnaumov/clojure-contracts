@@ -214,3 +214,25 @@
     (do (send z -) (await z) @z) => -1
     (do (send z inc) (Thread/sleep 100) (throw (agent-error z)))
     => (throws AssertionError #"0")))
+
+
+(defrecord ARecord [a b])
+(c/provide-contract ARecord
+  #(= 1 (:a %)))
+
+(facts "Record invariants"
+
+  (fact "Factory functions and error messages"
+    (->ARecord 1 2) => #contracts.test.core.ARecord{:a 1 :b 2}
+    (->ARecord 2 2) => (throws AssertionError
+                               #"Invariant"
+                               #"contracts\.test\.core\.ARecord"
+                               #"Expecting: \(= 1 \(:a <record>\)\)"
+                               #"Given: #contracts.test.core.ARecord\{:a 2, :b 2\}")
+    (map->ARecord {:a 1 :b 2}) => #contracts.test.core.ARecord{:a 1 :b 2}
+    (map->ARecord {:a 2 :b 2}) =>  (throws AssertionError #"Invariant"))
+
+  (future-fact "Modifying functions"
+    (let [a (ARecord. 1 2)]
+      (assoc a :b 10) => {:a 1 :b 10}
+      (assoc a :a 10) => (throws AssertionError #"Invariant" #"10"))))
