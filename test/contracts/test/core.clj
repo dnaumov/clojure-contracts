@@ -232,7 +232,17 @@
     (map->ARecord {:a 1 :b 2}) => #contracts.test.core.ARecord{:a 1 :b 2}
     (map->ARecord {:a 2 :b 2}) =>  (throws AssertionError #"Invariant"))
 
-  (future-fact "Modifying functions"
-    (let [a (ARecord. 1 2)]
-      (assoc a :b 10) => {:a 1 :b 10}
-      (assoc a :a 10) => (throws AssertionError #"Invariant" #"10"))))
+  (fact "Modifying functions"
+    (let [r (ARecord. 1 2)]
+      (assoc r :b 10) => {:a 1 :b 10}
+      (assoc r :a 10) => (throws AssertionError #"Invariant" #"10")
+      (dissoc r :a) => (throws AssertionError #"Invariant" #"\{:b 2\}")
+      (assoc-in r [:a] 10) => (throws AssertionError #"Invariant" #"10")
+      (update-in r [:a] inc) => (throws AssertionError #"Invariant" #"2")
+      (conj r [:c 3]) => {:a 1 :b 2 :c 3}
+      (conj r [:a 2]) => (throws AssertionError #"Invariant" #"2")
+      (into {:a 2} r) => {:a 1 :b 2}
+      (into r {:a 2}) => (throws AssertionError #"Invariant" #"2")
+      (merge {:a 2} r) => {:a 1 :b 2}
+      (merge r {:a 2}) => (throws AssertionError #"Invariant" #"2")
+      (merge-with + r {:a 1}) => (throws AssertionError #"Invariant" #"2"))))

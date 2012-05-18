@@ -135,35 +135,42 @@
                      :expr `(deref ~target)
                      :value newval}))))
 
-(defprotocol Constrained
-  (check-constraint [this]))
+;; XXX: it's used instead of protocols because protocol function call
+;; in `apply-record-contract` causes infinite recursion and
+;; throws StackOverflowException. 
+(def record-hooks (atom {}))
 
-(defn apply-record-contract [f & args]
-  (let [result (apply f args)]
-    (if (satisfies? Constrained result)
-        (check-constraint result)
-        result)))
+(defn add-record-hook [class f]
+  (swap! record-hooks assoc class f))
 
-(comment
-  (doseq [v [#'assoc #'dissoc #'assoc-in #'update-in
-             #'conj #'into #'merge #'merge-with]]
-    (add-hook v #'apply-record-contract)))
+(defn apply-record-contract [f]
+  (if (:hooked (meta f))
+    f
+    (with-meta
+      (fn [m & args]
+        (if-let [hook (get @record-hooks (class m))]
+          (hook (apply f m args))
+          (apply f m args)))
+      {:hooked true})))
+
+(doseq [v [#'assoc #'dissoc #'assoc-in #'update-in
+           #'conj #'into #'merge #'merge-with]]
+  (alter-var-root v #'apply-record-contract))
 
 (defn gen-constrain-record [class pred]
   (let [name (.getSimpleName class)
         this (gensym "this")
         [factory map-factory] (map #(symbol (str % name)) ["->" "map->"])]
-    `(do (add-hook (var ~factory) #'apply-record-contract)
-         (add-hook (var ~map-factory) #'apply-record-contract)
-         (extend ~class
-           Constrained
-           {:check-constraint (fn [~this]
-                                ~(gen-check* {:type :invariant
-                                              :cond `(~pred ~this)
-                                              :return-val this
-                                              :pred pred
-                                              :expr (symbol "<record>")
-                                              :value this}))}))))
+    `(do (alter-var-root (var ~factory) #'apply-record-contract)
+         (alter-var-root (var ~map-factory) #'apply-record-contract)
+         (add-record-hook ~class
+                          (fn [~this]
+                            ~(gen-check* {:type :invariant
+                                          :cond `(~pred ~this)
+                                          :return-val this
+                                          :pred pred
+                                          :expr (symbol "<record>")
+                                          :value this}))))))
 
 (defmacro provide-contract [target contract]
   (let [contract (normalize-contract contract)
@@ -186,4 +193,4 @@
 
 
 (load "preds")
-;; (load "curried") ; this line should be commented out during development
+(load "curried") ; this line should be commented out during development
