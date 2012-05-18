@@ -3,7 +3,8 @@
   (:require [clojure.core :as clj])
   (:use contracts.utils
         [clojure.core.match :only [match]]
-        [clojure.walk :only [postwalk]]))
+        [clojure.walk :only [postwalk]]
+        [robert.hooke :only [add-hook]]))
 
 (def current-target (atom nil))
 
@@ -137,24 +138,23 @@
 (defprotocol Constrained
   (check-constraint [this]))
 
-(defn apply-record-contract [f]
-  (fn [& args]
-    (let [result (apply f args)]
-      (if (satisfies? Constrained result)
+(defn apply-record-contract [f & args]
+  (let [result (apply f args)]
+    (if (satisfies? Constrained result)
         (check-constraint result)
-        result))))
+        result)))
 
 (comment
   (doseq [v [#'assoc #'dissoc #'assoc-in #'update-in
              #'conj #'into #'merge #'merge-with]]
-    (alter-var-root v apply-record-contract)))
+    (add-hook v #'apply-record-contract)))
 
 (defn gen-constrain-record [class pred]
   (let [name (.getSimpleName class)
         this (gensym "this")
         [factory map-factory] (map #(symbol (str % name)) ["->" "map->"])]
-    `(do (alter-var-root (var ~factory) apply-record-contract)
-         (alter-var-root (var ~map-factory) apply-record-contract)
+    `(do (add-hook (var ~factory) #'apply-record-contract)
+         (add-hook (var ~map-factory) #'apply-record-contract)
          (extend ~class
            Constrained
            {:check-constraint (fn [~this]
@@ -172,7 +172,9 @@
                           target)]
     (reset! current-target resolved-target)
     `(do ~(cond
-           (fn-contract-expr? contract) `(alter-var-root (var ~target) ~contract)
+           (fn-contract-expr? contract) `(add-hook (var ~target) ::contract
+                                                   (fn [f# & args#]
+                                                     (apply (~contract f#) args#)))
            (class? resolved-target) (gen-constrain-record resolved-target contract)
            :else `(set-validator! ~target ~(gen-iref-contract target contract)))
          (reset! current-target nil))))
